@@ -1,0 +1,111 @@
+import telebot
+import datetime
+import pytz
+import threading
+import random
+
+
+token = '6222468139:AAFRUneatVF3hqvy1mPrnKu3DsfJAapIadM'
+bot = telebot.TeleBot(token)
+
+
+sti = 'C:\\Users\\kalsa\\OneDrive\\Изображения\\MySQL\\sticker.webp'
+
+
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    sti = open('C:\\Users\\kalsa\\OneDrive\\Изображения\\MySQL\\sticker.webp', 'rb')
+    bot.send_sticker(message.chat.id, sti)
+    bot.send_message(message.chat.id, 'Привет, я бот!')
+
+@bot.message_handler(commands=['help'])
+def start_message(message):
+    bot.send_message(message.chat.id, 'Я могу показать тебе текущее московское время. Для этого отправь мне команду /time.')
+    bot.send_message(message.chat.id, 'Чтобы создать напоминание, введите /reminder.')
+    bot.send_message(message.chat.id, 'Чтобы сыграть в игру "Угадай число", введите /random.')
+
+
+@bot.message_handler(commands=['random'])
+def send_welcome(message):
+    bot.reply_to(message, "Я сыграю с тобой в Угадай число. Я загадаю число от 1 до 10, а тебе нужно будет угадать его.")
+
+@bot.message_handler(commands=['random'])
+def guess_number(message):
+    try:
+        number = int(message.text)
+    except ValueError:
+        bot.reply_to(message, "Пожалуйста, введите число.")
+        return
+
+    if number < 1 or number > 100:
+        bot.reply_to(message, "Число должно быть от 1 до 100.")
+        return
+
+    if number == secret_number:
+        bot.reply_to(message, "Поздравляю, ты угадал число!")
+        return
+
+    if number < secret_number:
+        bot.reply_to(message, "Загаданное число больше.")
+    else:
+        bot.reply_to(message, "Загаданное число меньше.")
+
+secret_number = random.randint(1, 10)
+
+
+
+@bot.message_handler(commands=['time'])
+def time_message(message):
+    tz = pytz.timezone('Europe/Moscow')
+    current_time = datetime.datetime.now(tz).strftime('%H:%M:%S')
+    bot.send_message(message.chat.id, f'Текущее московское время: {current_time}')
+
+
+@bot.message_handler(commands=['reminder'])
+def reminder_message(message):
+    bot.send_message(message.chat.id, 'Введите название напоминания:')
+    bot.register_next_step_handler(message, set_reminder_name)
+
+def set_reminder_name(message):
+    user_data = {}
+    user_data[message.chat.id] = {'reminder_name': message.text}
+    bot.send_message(message.chat.id, 'Введите дату и время, когда вы хотите получить напоминание в формате ГГГГ-ММ-ДД чч:мм:сс.')
+    bot.register_next_step_handler(message, reminder_set, user_data)
+
+def reminder_set(message, user_data):
+    try:
+# Преобразуем введенную пользователем дату и время в формат datetime
+        reminder_time = datetime.datetime.strptime(message.text, '%Y-%m-%d %H:%M:%S')
+        now = datetime.datetime.now()
+        delta = reminder_time - now
+# Если введенная пользователем дата и время уже прошли, выводим сообщение об ошибке
+        if delta.total_seconds() <= 0:
+            bot.send_message(message.chat.id, 'Вы ввели прошедшую дату, попробуйте еще раз.')
+# Если пользователь ввел корректную дату и время, устанавливаем напоминание и запускаем таймер
+        else:
+            reminder_name = user_data[message.chat.id]['reminder_name']
+            bot.send_message(message.chat.id, 'Напоминание "{}" установлено на {}.'.format(reminder_name, reminder_time))
+            reminder_timer = threading.Timer(delta.total_seconds(), send_reminder, [message.chat.id, reminder_name])
+            reminder_timer.start()
+# Если пользователь ввел некорректную дату и время, выводим сообщение об ошибке
+    except ValueError:
+        bot.send_message(message.chat.id, 'Вы ввели неверный формат даты и времени, попробуйте еще раз.')
+
+# Функция, которая отправляет напоминание пользователю
+def send_reminder(chat_id, reminder_name):
+    bot.send_message(chat_id, '"{}"!'.format(reminder_name))
+
+
+# обработчик текстовых сообщений
+@bot.message_handler(content_types=['text'])
+def text_message(message):
+    if message.text.lower() == 'привет':
+        bot.send_message(message.chat.id, 'Привет!')
+    elif message.text.lower() == 'как дела':
+        bot.send_message(message.chat.id, 'У меня всё хорошо, а у тебя?')
+    else:
+        bot.send_message(message.chat.id, 'Я не понимаю, о чем вы говорите.')
+
+
+
+bot.polling(non_stop=True)
